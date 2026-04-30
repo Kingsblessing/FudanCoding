@@ -25,7 +25,7 @@ git push -u origin main
 
 
 #push an existing repository from the command line
-git remote add origin git@github.com:Kingsblessing/Fudan-CS10005-ICS-Lab.git
+git remote set-url origin git@github.com:Kingsblessing/Fudan-CS10005-ICS-Lab.git
 git branch -M main
 git push -u origin main
 
