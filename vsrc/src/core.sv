@@ -126,7 +126,7 @@ module core import common::*;(
 	output dbus_req_t  dreq, 
 	input  dbus_resp_t dresp, 
 	input  logic       trint, swint, exint,
-	// Lab5: MMU in SimTop/VTop
+	// MMU in SimTop/VTop
 	output u2          priv_mode_out,
 	output word_t      satp_out
 );
@@ -185,7 +185,7 @@ module core import common::*;(
 	u5 commit_wdest;
 	word_t commit_wdata;
 	
-	// Lab4: csr_we 与 regfile 写回同属 WB；dbg_* 为组合次态（Difftest posedge 对齐 NEMU）
+	// csr_we 与 regfile 写回同属 WB；dbg_* 为组合次态（Difftest posedge 对齐 NEMU）
 	csr_regfile csr_regfile_inst(
 		.clk(clk),
 		.reset(reset),

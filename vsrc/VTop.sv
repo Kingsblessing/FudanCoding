@@ -7,9 +7,18 @@
 `include "util/IBusToCBus.sv"
 `include "util/DBusToCBus.sv"
 `include "util/CBusArbiter.sv"
-`include "util/mmu.sv"
-
+`include "src/mmu.sv"
 `endif
+
+`ifdef VIVADO
+`include "include/common.sv"
+`include "core.sv"
+`include "IBusToCBus.sv"
+`include "DBusToCBus.sv"
+`include "CBusArbiter.sv"
+`include "mmu.sv"
+`endif
+
 module VTop 
 	import common::*;(
 	input logic clk, reset,

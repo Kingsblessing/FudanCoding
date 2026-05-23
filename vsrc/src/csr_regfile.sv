@@ -14,7 +14,7 @@
 import common::*;
 import csr_pkg::*;
 
-// Lab4：CSR 寄存器与读写（mhartid 只读；mcycle 每周期自增，写覆盖）
+// CSR 寄存器与读写（mhartid 只读；mcycle 每周期自增，写覆盖）
 // dbg_* 为组合下一拍状态，供 Difftest 在 posedge 采样（与 NEMU 提交后一致）
 module csr_regfile import common::*; import csr_pkg::*; (
     input  logic       clk,
@@ -24,7 +24,7 @@ module csr_regfile import common::*; import csr_pkg::*; (
     input  word_t      csr_wdata,
     input  u12         csr_raddr,
     output word_t      csr_rdata,
-    // Lab5: EX 侧 flush/redirect 用 trap_fire_ex；CSR 陷阱在 WB 提交
+    // EX 侧 flush/redirect 用 trap_fire_ex；CSR 陷阱在 WB 提交
     input  logic       trap_fire_ex,
     input  logic       trap_csr_commit,
     input  logic       trap_is_mret_ex,
@@ -133,7 +133,7 @@ module csr_regfile import common::*; import csr_pkg::*; (
             satp_d      = 64'b0;
             priv_mode_d = 2'b11;
         end else begin
-            // Lab5: trap_csr_commit (WB, older) first; trap_fire_ex (EX, newer) overrides
+            // trap_csr_commit (WB, older) first; trap_fire_ex (EX, newer) overrides
             if (trap_csr_commit) begin
                 if (trap_is_mret_wb) begin
                     priv_mode_d = mstatus_q[12:11];
