@@ -12,11 +12,11 @@
 
 `ifdef VIVADO
 `include "include/common.sv"
-`include "core.sv"
-`include "IBusToCBus.sv"
-`include "DBusToCBus.sv"
-`include "CBusArbiter.sv"
-`include "mmu.sv"
+`include "src/core.sv"
+`include "util/IBusToCBus.sv"
+`include "util/DBusToCBus.sv"
+`include "util/CBusArbiter.sv"
+`include "src/mmu.sv"
 `endif
 
 module VTop 
