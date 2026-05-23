@@ -9,7 +9,8 @@ import common::*;
 
 module writeback import common::*;( 
     input  logic       clk, reset, 
-    input  logic       step, 
+    input  logic       step,
+    input  logic       block_commit,
     output logic       writeback_ok, 
     input  REG_MEM_WB  mem_wb_reg, 
     output logic       reg_wen, 
@@ -32,7 +33,8 @@ module writeback import common::*;(
     assign reg_wdata = (mem_wb_reg.mem_to_reg == 2'b01) ? mem_wb_reg.mem_data : mem_wb_reg.alu_result;
 
     // Difftest 提交信号
-    assign commit_valid = mem_wb_reg.valid & step;
+    // block_commit: only suppress WB on ecall (mret still commits for difftest)
+    assign commit_valid = mem_wb_reg.valid & step & ~block_commit;
     assign commit_pc    = mem_wb_reg.pc;
     assign commit_instr = mem_wb_reg.instr;
     assign commit_wen   = reg_wen; 

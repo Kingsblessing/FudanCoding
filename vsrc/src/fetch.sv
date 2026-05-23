@@ -15,6 +15,7 @@ module fetch import common::*;(
     input  ibus_resp_t iresp, 
     input  logic       redirect_valid,
     input  u64         redirect_pc,
+    input  logic       trap_fire,
     output REG_IF_ID   if_id_reg 
 );
     u64 pc;
@@ -37,6 +38,13 @@ module fetch import common::*;(
             if_id_reg.valid <= 1'b0;
             if_id_reg.pc <= 64'b0;
             if_id_reg.instr <= 32'b0;
+        end else if (trap_fire) begin
+            fetch_ok            <= 1'b1;
+            fetch_in_progress   <= 1'b0;
+            redirect_pending    <= 1'b0;
+            ireq.valid          <= 1'b0;
+            if_id_reg.valid     <= 1'b0;
+            pc                  <= redirect_pc;
         end else if (redirect_valid) begin
             if_id_reg.valid <= 1'b0;
             if (fetch_in_progress) begin

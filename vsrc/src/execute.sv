@@ -16,8 +16,14 @@ module execute import common::*;(
     input  word_t      wb_data,
     input  word_t      mem_forward_data,
     input  word_t      csr_rdata,
+    input  word_t      csr_mtvec,
+    input  word_t      csr_mepc,
+    input  u2          priv_mode_q,
     output logic       redirect_valid,
     output u64         redirect_pc,
+    output logic       trap_fire,
+    output logic       trap_is_mret,
+    output u12         trap_ecall_imm,
     output REG_EX_MEM  ex_mem_reg
 );
     localparam logic [4:0] ALU_MUL   = 5'd16;
@@ -66,6 +72,8 @@ module execute import common::*;(
 
     logic csr_do_write;
     word_t csr_wval_c;
+    logic is_ecall;
+    logic is_mret;
 
     // 前向逻辑
     always_comb begin
@@ -203,10 +211,21 @@ module execute import common::*;(
         end
         if (id_ex_reg.is_csr)
             alu_result = csr_rdata;
+
+        is_ecall = id_ex_reg.is_system && !id_ex_reg.is_csr
+                   && (id_ex_reg.instr == 32'h00000073);
+        is_mret  = id_ex_reg.is_system && (id_ex_reg.instr == 32'h30200073);
     end
 
-    assign redirect_valid = step & id_ex_reg.valid & (branch_taken | id_ex_reg.is_csr);
-    assign redirect_pc = id_ex_reg.is_csr ? (id_ex_reg.pc + 64'd4) : branch_target;
+    assign redirect_valid = step & id_ex_reg.valid
+                          & (branch_taken | id_ex_reg.is_csr | is_ecall | is_mret);
+    assign redirect_pc    = is_mret ? csr_mepc
+                          : is_ecall ? csr_mtvec
+                          : id_ex_reg.is_csr ? (id_ex_reg.pc + 64'd4)
+                          : branch_target;
+    assign trap_fire       = step & id_ex_reg.valid & (is_ecall | is_mret);
+    assign trap_is_mret    = is_mret;
+    assign trap_ecall_imm  = id_ex_reg.imm[11:0];
 
     // 迭代乘除法用的组合逻辑临时变量
     logic [63:0] init_op_a, init_op_b, init_abs_a, init_abs_b;
@@ -236,6 +255,9 @@ module execute import common::*;(
             ex_mem_reg.csr_pending <= 1'b0;
             ex_mem_reg.csr_paddr <= 12'b0;
             ex_mem_reg.csr_pwdata <= 64'b0;
+            ex_mem_reg.trap_pending <= 1'b0;
+            ex_mem_reg.trap_is_mret <= 1'b0;
+            ex_mem_reg.trap_priv     <= 2'b11;
             iter_acc <= 64'd0;
             iter_quo <= 64'd0;
             iter_divisor <= 64'd0;
@@ -251,7 +273,21 @@ module execute import common::*;(
             // 默认清除 md_finishing
             md_finishing <= 1'b0;
 
-            if (md_start) begin
+            // Lab5: trap 标记进入 MEM/WB 再更新 CSR；EX 仍 flush/redirect
+            if (trap_fire) begin
+                ex_mem_reg.valid        <= 1'b1;
+                ex_mem_reg.pc           <= id_ex_reg.pc;
+                ex_mem_reg.instr        <= id_ex_reg.instr;
+                ex_mem_reg.trap_pending <= 1'b1;
+                ex_mem_reg.trap_is_mret <= trap_is_mret;
+                ex_mem_reg.trap_priv     <= priv_mode_q;
+                ex_mem_reg.reg_write    <= 1'b0;
+                ex_mem_reg.csr_pending  <= 1'b0;
+                ex_mem_reg.is_load      <= 1'b0;
+                ex_mem_reg.is_store     <= 1'b0;
+                ex_mem_reg.mem_write    <= 1'b0;
+                ex_mem_reg.mem_read     <= 1'b0;
+            end else if (md_start) begin
                 md_busy <= 1'b1;
                 md_result_ready <= 1'b0;
                 iter_is_mul <= (id_ex_reg.alu_op == ALU_MUL) || (id_ex_reg.alu_op == ALU_MULW);
@@ -340,7 +376,7 @@ module execute import common::*;(
                 end
             end
 
-            if (step && (!id_is_muldiv || md_result_ready)) begin
+            if (step && (!id_is_muldiv || md_result_ready) && !trap_fire) begin
                 ex_mem_reg.valid <= id_ex_reg.valid;
                 ex_mem_reg.pc <= id_ex_reg.pc;
                 ex_mem_reg.instr <= id_ex_reg.instr;
@@ -354,6 +390,9 @@ module execute import common::*;(
                 ex_mem_reg.mem_write <= id_ex_reg.mem_write;
                 ex_mem_reg.mem_read <= id_ex_reg.mem_read;
                 ex_mem_reg.mem_to_reg <= id_ex_reg.mem_to_reg;
+                ex_mem_reg.trap_pending <= 1'b0;
+                ex_mem_reg.trap_is_mret <= 1'b0;
+                ex_mem_reg.trap_priv     <= 2'b11;
                 // Lab4: EX 只算写数据，真正写入在 WB（见 core csr_we）
                 ex_mem_reg.csr_pending <= id_ex_reg.valid & id_ex_reg.is_csr & csr_do_write;
                 ex_mem_reg.csr_paddr <= id_ex_reg.imm[11:0];

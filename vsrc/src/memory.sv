@@ -11,7 +11,8 @@ module memory import common::*;(
     input  logic       clk, reset, 
     input  logic       step, 
     output logic       mem_ok, 
-    input  REG_EX_MEM  ex_mem_reg, 
+    input  REG_EX_MEM  ex_mem_reg,
+    input  logic       flush,
     output dbus_req_t  dreq, 
     input  dbus_resp_t dresp, 
     output REG_MEM_WB  mem_wb_reg,
@@ -72,25 +73,35 @@ module memory import common::*;(
             mem_wb_reg.csr_pending <= 1'b0;
             mem_wb_reg.csr_paddr <= 12'b0;
             mem_wb_reg.csr_pwdata <= 64'b0;
+            mem_wb_reg.trap_pending <= 1'b0;
+            mem_wb_reg.trap_is_mret <= 1'b0;
+            mem_wb_reg.trap_priv     <= 2'b11;
             
-        end else if (step) begin
-            // 当 step 为 1 时，意味着流水线推进。将 EX_MEM 正式送入 MEM_WB
-            req_completed <= 1'b0;
-            mem_wb_reg.valid <= ex_mem_reg.valid;
-            mem_wb_reg.pc <= ex_mem_reg.pc;
-            mem_wb_reg.instr <= ex_mem_reg.instr;
-            mem_wb_reg.rd <= ex_mem_reg.rd;
-            mem_wb_reg.reg_write <= ex_mem_reg.reg_write;
-            mem_wb_reg.alu_result <= ex_mem_reg.alu_result;
-            // 如果是 Load，使用暂存的 saved_rdata；否则正常透传 alu_result
-            mem_wb_reg.mem_data <= ex_mem_reg.is_load ? saved_rdata : ex_mem_reg.alu_result;
-            mem_wb_reg.mem_to_reg <= ex_mem_reg.mem_to_reg;
-            // Lab4: CSR 提交信息随 MEM/WB 寄存器传递
-            mem_wb_reg.csr_pending <= ex_mem_reg.csr_pending;
-            mem_wb_reg.csr_paddr <= ex_mem_reg.csr_paddr;
-            mem_wb_reg.csr_pwdata <= ex_mem_reg.csr_pwdata;
-
-        end else if (!mem_in_progress && ex_mem_reg.valid && (ex_mem_reg.is_load || ex_mem_reg.is_store) && !req_completed) begin
+        end else begin
+            if (flush && mem_in_progress) begin
+                // Lab5/6: trap 时取消未完成的访存，但保留 EX/MEM 中可提交的指令
+                mem_in_progress <= 1'b0;
+                dreq.valid      <= 1'b0;
+            end
+            if (step) begin
+                // 当 step 为 1 时，意味着流水线推进。将 EX_MEM 正式送入 MEM_WB
+                req_completed <= 1'b0;
+                mem_wb_reg.valid <= ex_mem_reg.valid;
+                mem_wb_reg.pc <= ex_mem_reg.pc;
+                mem_wb_reg.instr <= ex_mem_reg.instr;
+                mem_wb_reg.rd <= ex_mem_reg.rd;
+                mem_wb_reg.reg_write <= ex_mem_reg.reg_write;
+                mem_wb_reg.alu_result <= ex_mem_reg.alu_result;
+                mem_wb_reg.mem_data <= ex_mem_reg.is_load ? saved_rdata : ex_mem_reg.alu_result;
+                mem_wb_reg.mem_to_reg <= ex_mem_reg.mem_to_reg;
+                mem_wb_reg.csr_pending <= ex_mem_reg.csr_pending;
+                mem_wb_reg.csr_paddr <= ex_mem_reg.csr_paddr;
+                mem_wb_reg.csr_pwdata <= ex_mem_reg.csr_pwdata;
+                mem_wb_reg.trap_pending <= ex_mem_reg.trap_pending;
+                mem_wb_reg.trap_is_mret <= ex_mem_reg.trap_is_mret;
+                mem_wb_reg.trap_priv     <= ex_mem_reg.trap_priv;
+            end
+            if (!mem_in_progress && ex_mem_reg.valid && (ex_mem_reg.is_load || ex_mem_reg.is_store) && !req_completed) begin
             // 发现需要访存的指令，发起内存总线请求（此时 step 为 0，前序指令安全停留在 mem_wb_reg）
             mem_in_progress <= 1'b1;
             dreq.valid <= 1'b1;
@@ -116,15 +127,13 @@ module memory import common::*;(
                 endcase
             end
             
-            // 去掉了 mem_wb_reg.valid <= 1'b0;
-            // 因为流水线阻塞时绝不应该破坏下游寄存器原有的未完成内容
-
-        end else if (mem_in_progress && dresp.data_ok && dresp.addr_ok) begin
-            // 从内存取回数据，暂存在 saved_rdata
-            mem_in_progress <= 1'b0;
-            dreq.valid <= 1'b0;
-            req_completed <= 1'b1; // 标记完成，触发下一拍的 mem_ok 和 step
-            saved_rdata <= final_rdata;
+            end
+            if (mem_in_progress && dresp.data_ok && dresp.addr_ok) begin
+                mem_in_progress <= 1'b0;
+                dreq.valid <= 1'b0;
+                req_completed <= 1'b1;
+                saved_rdata <= final_rdata;
+            end
         end
     end
 endmodule

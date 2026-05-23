@@ -198,11 +198,14 @@ module decode import common::*;(
                 alu_src = 1'b1;
                 imm = {{52{imm_i[11]}}, imm_i};
 			end
-            7'b1110011: begin // SYSTEM：CSR 指令（funct3!=0）；ecall/mret 等留待后续
+            7'b1110011: begin // SYSTEM：CSR / ecall / mret
+                is_system = 1'b1;
                 if (funct3 != 3'b000) begin
                     is_csr = 1'b1;
                     reg_write = (rd != 5'b0);
                     alu_src = 1'b0;
+                    imm = {52'b0, imm_i};
+                end else begin
                     imm = {52'b0, imm_i};
                 end
 			end
